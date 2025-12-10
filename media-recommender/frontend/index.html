@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anti-Gravity Recommendations</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <style>
+        body { margin: 0; padding: 0; overflow: hidden; background: #1a1a1a; color: white; font-family: 'Segoe UI', sans-serif; }
+        #controls { position: absolute; top: 20px; left: 20px; z-index: 100; }
+        button { padding: 10px 20px; font-size: 16px; cursor: pointer; background: #ff4757; color: white; border: none; border-radius: 5px; }
+        button:hover { background: #ff6b81; }
+        #canvas-container { width: 100vw; height: 100vh; }
+    </style>
+</head>
+<body>
+
+<div id="controls">
+    <button onclick="toggleGravity()">Toggle Gravity</button>
+    <button onclick="fetchRecommendations()">Refresh Data</button>
+</div>
+<div id="canvas-container"></div>
+
+<script>
+    // Matter.js aliases
+    const Engine = Matter.Engine,
+          Render = Matter.Render,
+          Runner = Matter.Runner,
+          Bodies = Matter.Bodies,
+          Composite = Matter.Composite,
+          Mouse = Matter.Mouse,
+          MouseConstraint = Matter.MouseConstraint;
+
+    // Create engine
+    const engine = Engine.create();
+    const world = engine.world;
+
+    // Create renderer
+    const render = Render.create({
+        element: document.getElementById('canvas-container'),
+        engine: engine,
+        options: {
+            width: window.innerWidth,
+            height: window.innerHeight,
+            wireframes: false,
+            background: '#1a1a1a'
+        }
+    });
+
+    Render.run(render);
+    const runner = Runner.create();
+    Runner.run(runner, engine);
+
+    // Boundaries
+    const ground = Bodies.rectangle(window.innerWidth/2, window.innerHeight + 30, window.innerWidth, 60, { isStatic: true });
+    const ceiling = Bodies.rectangle(window.innerWidth/2, -30, window.innerWidth, 60, { isStatic: true });
+    const leftWall = Bodies.rectangle(-30, window.innerHeight/2, 60, window.innerHeight, { isStatic: true });
+    const rightWall = Bodies.rectangle(window.innerWidth + 30, window.innerHeight/2, 60, window.innerHeight, { isStatic: true });
+
+    Composite.add(world, [ground, ceiling, leftWall, rightWall]);
+
+    // Mouse control
+    const mouse = Mouse.create(render.canvas);
+    const mouseConstraint = MouseConstraint.create(engine, {
+        mouse: mouse,
+        constraint: { stiffness: 0.2, render: { visible: false } }
+    });
+    Composite.add(world, mouseConstraint);
+    render.mouse = mouse;
+
+    // Logic
+    function createCard(title, x, y) {
+        const width = 200;
+        const height = 100;
+        
+        // We can use a colored rectangle for the card body
+        const body = Bodies.rectangle(x, y, width, height, {
+            chamfer: { radius: 10 },
+            render: {
+                fillStyle: '#2ed573',
+                strokeStyle: 'white',
+                lineWidth: 2,
+                text: {
+                    content: title,
+                    color: 'white',
+                    size: 16,
+                    family: 'Arial'
+                }
+            }
+        });
+        
+        // Custom property to hold text (Matter.js render doesn't support text natively easily without plugin, 
+        // but we can hack it or just rely on the shape for now. 
+        // For a true Web App, we'd sync DOM elements with Physics bodies.
+        // Let's implement DOM syncing for better visuals.)
+        
+        // Actually, let's do the pure canvas text hack or DOM sync.
+        // DOM sync is cleaner for "Cards".
+        return body;
+    }
+
+    // Since Matter.js default renderer doesn't do text, let's hook into afterRender
+    // OR, simpler: just use generic boxes for the physics demo as requested, 
+    // or overlay DOM elements.
+    // Let's try overlay DOM elements sync for "Wow" factor.
+    
+    let cards = []; // { body: body, elem: domElement }
+
+    function addMovieCard(title) {
+        const x = Math.random() * (window.innerWidth - 100) + 50;
+        const y = -100 - Math.random() * 500; // Start above screen
+        
+        const body = Bodies.rectangle(x, y, 200, 100, {
+            restitution: 0.5
+        });
+        
+        const elem = document.createElement('div');
+        elem.innerText = title;
+        elem.style.position = 'absolute';
+        elem.style.width = '200px';
+        elem.style.height = '100px';
+        elem.style.background = 'linear-gradient(135deg, #6c5ce7, #a29bfe)';
+        elem.style.color = 'white';
+        elem.style.display = 'flex';
+        elem.style.alignItems = 'center';
+        elem.style.justifyContent = 'center';
+        elem.style.borderRadius = '10px';
+        elem.style.boxShadow = '0 4px 15px rgba(0,0,0,0.3)';
+        elem.style.userSelect = 'none';
+        elem.style.fontWeight = 'bold';
+        
+        document.body.appendChild(elem);
+        Composite.add(world, body);
+        
+        cards.push({ body, elem });
+    }
+
+    // Sync loop
+    Matter.Events.on(engine, 'afterUpdate', () => {
+        cards.forEach(card => {
+            const { position, angle } = card.body;
+            card.elem.style.transform = `translate(${position.x - 100}px, ${position.y - 50}px) rotate(${angle}rad)`;
+        });
+    });
+
+    let gravityOn = true;
+    function toggleGravity() {
+        gravityOn = !gravityOn;
+        engine.gravity.y = gravityOn ? 1 : -1;
+    }
+
+    async function fetchRecommendations() {
+        // Clear existing
+        cards.forEach(c => {
+            Composite.remove(world, c.body);
+            c.elem.remove();
+        });
+        cards = [];
+
+        try {
+            // In a real scenario, this URL would be dynamic or proxied
+            // Assuming this runs on same host or CORS handles it.
+            // For Cloud IDE preview, we might need the full URL or relative path if served together.
+            // Since they are separate services (8080 vs 5000 vs frontend ??), 
+            // usually in Codespaces you have ported URLs. 
+            // We'll assume the frontend is opened as a file or served.
+            // Let's try to fetch from localhost:8080 by default.
+            
+            const response = await fetch('http://localhost:8080/api/recommendations');
+            if(!response.ok) throw new Error('Network response was not ok');
+            const data = await response.json();
+            
+            data.forEach(item => {
+                addMovieCard(item.title);
+            });
+            
+             if (data.length === 0) {
+                addMovieCard("No Data Yet");
+                addMovieCard("Try Adding Ratings");
+            }
+
+        } catch (e) {
+            console.error(e);
+            addMovieCard("Error Connecting");
+            addMovieCard("Is Java Backend Up?");
+        }
+    }
+
+    // Initial load
+    // setTimeout(fetchRecommendations, 1000); 
+    // We don't auto fetch immediately to avoid error spam if backend isn't ready. 
+    // User can click Refresh.
+</script>
+</body>
+</html>
